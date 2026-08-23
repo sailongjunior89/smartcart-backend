@@ -1,0 +1,25 @@
+{
+    "gender": {
+        "0": "MEN",
+        "1": "WOMEN"
+    },
+    "category": {
+        "0": "SHIRT",
+        "1": "PANT",
+        "2": "SHOE"
+    },
+    "color": {
+        "0": "BLACK",
+        "1": "BLUE",
+        "2": "BROWN",
+        "3": "GRAY",
+        "4": "GREEN",
+        "5": "ORANGE",
+        "6": "PINK",
+        "7": "PURPLE",
+        "8": "RED",
+        "9": "WHITE",
+        "10": "YELLOW"
+    },
+    "image_size": 128
+}

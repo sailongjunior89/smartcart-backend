@@ -1,0 +1,39 @@
+package nus.iss.smartcart.backend.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(
+        name = "product_variant",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"product_id", "size"})
+)
+@Getter
+@Setter
+public class ProductVariant {
+
+    public ProductVariant() {
+        // Intentionally empty: required by JPA/Hibernate for entity instantiation.
+    }
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
+
+    private String size;
+
+    private Integer stock;
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeSize() {
+        if (size != null) {
+            size = size.trim().toUpperCase();
+        }
+    }
+}
