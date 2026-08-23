@@ -624,7 +624,7 @@ Content-Type: application/json
 ```json
 {
   "email": "alex@example.com",
-  "password": "password123"
+  "password": "Password123!"
 }
 ```
 
@@ -2168,7 +2168,7 @@ The repository currently contains:
 
 # Author
 
-**Sailong Junior**
+**Sai Long Junior**
 
 GitHub:
 
