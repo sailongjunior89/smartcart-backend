@@ -27,11 +27,11 @@ INSERT INTO smartcart_user_profile (id, user_id, first_name, last_name, address,
                                                                                                                                                                                 (1, 1, 'SmartCart', 'Official', '1 Store Road, Singapore', '018956', '65001234', NULL, NULL, NULL, NULL),
                                                                                                                                                                                 (2, 2, 'Grace', 'Tan', '123 Orchard Road, Singapore', '238888', '91234567', NULL,  'Linen,Breathable,Summer', 'Tops,Bottoms', 200.00),
                                                                                                                                                                                 (3, 3, 'Alex', 'Lim', '45 Bukit Timah Road, Singapore', '229899', '98765432', NULL, 'Casual,Cotton,Minimalist', 'Tops,Shoes', 150.00),
-                                                                                                                                                                                (4, 4, 'SmartCart', 'Admin', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+                                                                                                                                                                                (4, 4, 'SmartCart', 'Admin', '277 Orchard Road, Singapore', '238858', '8123456',    NULL, NULL, NULL, NULL)
     ON DUPLICATE KEY UPDATE
                          user_id = VALUES(user_id), first_name = VALUES(first_name), last_name = VALUES(last_name),
                          address = VALUES(address), postal_code = VALUES(postal_code), phone_number = VALUES(phone_number),
-                         avatar_url = VALUES(avatar_url), shop_name = VALUES(shop_name), interests = VALUES(interests),
+                         avatar_url = VALUES(avatar_url), interests = VALUES(interests),
                          preferred_categories = VALUES(preferred_categories), budget = VALUES(budget);
 
 -- -------------------------------------------------------------
