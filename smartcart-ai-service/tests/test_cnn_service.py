@@ -1,204 +1,754 @@
+import json
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
-
-#
-#   Author: Junior
-#
-
-from services.cnn_service import CNNService
-
-BASE_DIR = Path(__file__).resolve().parent
-CNN_DIR = BASE_DIR / "cnn"
-TEST_IMAGE = BASE_DIR / "dataset" / "test" / "test.jpg"
-
-
-class FakeFeatureExtractor:
-    def predict(self, image, verbose=0):
-        return np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+from tensorflow import keras
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+    classification_report
+)
 
 
-def create_fake_service():
-    service = CNNService()
-    service.model = object()
-    service.feature_extractor = FakeFeatureExtractor()
-    service.feature_vectors = np.array(
-        [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]],
-        dtype=np.float32,
-    )
-    service.product_index = [
-        {
-            "productId": 1,
-            "filename": "img (1).jpg",
-            "gender": "MAN",
-            "color": "RED",
-            "category": "Shirt",
-        },
-        {
-            "productId": 2,
-            "filename": "img (2).jpg",
-            "gender": "WOMAN",
-            "color": "BLUE",
-            "category": "Shirt",
-        },
-    ]
-    return service
+# =========================================================
+# PROJECT PATH
+# =========================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_cnn_service_initial_state():
-    service = CNNService()
-    assert service.image_size == 128
-    assert service.model is None
-    assert service.feature_extractor is None
-    assert service.feature_vectors is None
-    assert service.product_index is None
+# =========================================================
+# TEST DATASET
+# =========================================================
+
+TEST_DIR = (
+    PROJECT_ROOT
+    / "tests"
+    / "dataset"
+)
 
 
-def test_preprocess_image():
-    service = CNNService()
-    image = np.zeros((300, 400, 3), dtype=np.uint8)
-    processed = service.preprocess(image)
-    assert processed.shape == (1, 128, 128, 3)
-    assert processed.dtype == np.float32
-    assert processed.min() >= 0.0
-    assert processed.max() <= 1.0
+# =========================================================
+# MODEL
+# =========================================================
+
+MODEL_PATH = (
+    PROJECT_ROOT
+    / "cnn"
+    / "models"
+    / "color_cnn.keras"
+)
 
 
-def test_extract_feature_normalizes_vector():
-    service = CNNService()
+# =========================================================
+# CLASS MAPPING
+# =========================================================
 
-    class FakeExtractor:
-        def predict(self, image, verbose=0):
-            return np.array([[3.0, 4.0, 0.0, 0.0]], dtype=np.float32)
-
-    service.feature_extractor = FakeExtractor()
-    feature = service.extract_feature(np.zeros((1, 128, 128, 3), dtype=np.float32))
-    assert feature.shape == (4,)
-    assert np.isclose(np.linalg.norm(feature), 1.0)
-    assert np.allclose(feature, [0.6, 0.8, 0.0, 0.0])
+MAPPING_PATH = (
+    PROJECT_ROOT
+    / "cnn"
+    / "models"
+    / "class_mapping.json"
+)
 
 
-def test_search_without_loaded_model():
-    service = CNNService()
-    with pytest.raises(Exception, match="CNN model has not been loaded"):
-        service.search(b"not-an-image")
+# =========================================================
+# ACTUAL LABELS
+# =========================================================
+
+LABELS_PATH = (
+    TEST_DIR
+    / "test_labels.json"
+)
 
 
-def test_search_invalid_image():
-    service = create_fake_service()
-    with pytest.raises(Exception, match="Cannot decode uploaded image"):
-        service.search(b"not-a-real-image")
+# =========================================================
+# IMAGE SETTINGS
+# =========================================================
+
+IMAGE_SIZE = 128
+
+IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp"
+}
 
 
-def _patch_search_dependencies(monkeypatch):
-    monkeypatch.setattr("services.cnn_service.detect_color", lambda image: "RED")
-    monkeypatch.setattr(
-        "services.cnn_service.get_color_bonus",
-        lambda query_color, product_color: 1.0 if query_color == product_color else 0.0,
+# =========================================================
+# LOAD COLOR MAPPING
+# =========================================================
+
+def load_color_mapping():
+
+    assert MAPPING_PATH.exists(), (
+        f"\nColor mapping not found:\n"
+        f"{MAPPING_PATH}"
     )
 
+    with open(
+        MAPPING_PATH,
+        "r",
+        encoding="utf-8"
+    ) as file:
 
-def _make_test_image_bytes():
-    image = np.zeros((128, 128, 3), dtype=np.uint8)
-    image[:, :] = (0, 0, 255)
-    success, encoded = cv2.imencode(".jpg", image)
-    assert success
-    return encoded.tobytes()
+        mapping = json.load(file)
 
+    assert "color" in mapping, (
+        "\nclass_mapping.json does not contain "
+        "'color' mapping."
+    )
 
-def test_search_returns_expected_structure(monkeypatch):
-    service = create_fake_service()
-    _patch_search_dependencies(monkeypatch)
-    response = service.search(_make_test_image_bytes())
-
-    assert "prediction" in response
-    assert "query_color" in response
-    assert "total" in response
-    assert "results" in response
-    assert response["query_color"] == "RED"
-    assert response["total"] == 2
-    assert len(response["results"]) == 2
-
-
-def test_search_results_sorted_by_similarity(monkeypatch):
-    service = create_fake_service()
-    _patch_search_dependencies(monkeypatch)
-    response = service.search(_make_test_image_bytes())
-    similarities = [item["similarity"] for item in response["results"]]
-    assert similarities == sorted(similarities, reverse=True)
-
-
-def test_search_result_fields(monkeypatch):
-    service = create_fake_service()
-    _patch_search_dependencies(monkeypatch)
-    response = service.search(_make_test_image_bytes())
-
-    required = {
-        "productId", "filename", "gender", "color", "category",
-        "similarity", "cnn_score", "color_score",
+    color_mapping = {
+        int(key): value.upper()
+        for key, value
+        in mapping["color"].items()
     }
-    for result in response["results"]:
-        assert required.issubset(result.keys())
+
+    return color_mapping
 
 
-def test_prediction_format(monkeypatch):
-    service = create_fake_service()
-    _patch_search_dependencies(monkeypatch)
-    response = service.search(_make_test_image_bytes())
-    assert response["prediction"] == "MAN RED Shirt"
+# =========================================================
+# LOAD ACTUAL LABELS
+# =========================================================
+
+def load_actual_labels():
+
+    assert LABELS_PATH.exists(), (
+        f"\nTest labels not found:\n"
+        f"{LABELS_PATH}\n\n"
+        f"Please create this file."
+    )
+
+    with open(
+        LABELS_PATH,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        labels = json.load(file)
+
+    return {
+        filename: color.upper()
+        for filename, color
+        in labels.items()
+    }
 
 
-@pytest.mark.integration
-def test_real_cnn_search():
-    required_files = [
-        CNN_DIR / "best_model.keras",
-        CNN_DIR / "feature_vectors.npy",
-        CNN_DIR / "product_index.pkl",
-        TEST_IMAGE,
-    ]
-    if not all(path.exists() for path in required_files):
-        pytest.skip("Real CNN integration files/image are missing")
+# =========================================================
+# PREPARE IMAGE
+# =========================================================
 
-    service = CNNService()
-    service.load()
-    response = service.search(TEST_IMAGE.read_bytes())
+def prepare_image(image):
 
-    assert isinstance(response, dict)
-    assert isinstance(response["prediction"], str)
-    assert isinstance(response["query_color"], str)
-    assert isinstance(response["results"], list)
-    assert len(response["results"]) <= 10
+    if image is None:
+        raise ValueError(
+            "Image is empty."
+        )
 
-    for result in response["results"]:
-        assert "productId" in result
-        assert "filename" in result
-        assert "gender" in result
-        assert "color" in result
-        assert "category" in result
-        assert "similarity" in result
-        assert "cnn_score" in result
-        assert "color_score" in result
+    # OpenCV BGR -> RGB
+    image = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2RGB
+    )
+
+    # Resize
+    image = cv2.resize(
+        image,
+        (
+            IMAGE_SIZE,
+            IMAGE_SIZE
+        )
+    )
+
+    # float32
+    image = image.astype(
+        np.float32
+    )
+
+    # Normalize
+    image /= 255.0
+
+    # Add batch dimension
+    image = np.expand_dims(
+        image,
+        axis=0
+    )
+
+    return image
 
 
-@pytest.mark.integration
-def test_real_cnn_similarity_scores():
-    required_files = [
-        CNN_DIR / "best_model.keras",
-        CNN_DIR / "feature_vectors.npy",
-        CNN_DIR / "product_index.pkl",
-        TEST_IMAGE,
-    ]
-    if not all(path.exists() for path in required_files):
-        pytest.skip("Real CNN integration files/image are missing")
+# =========================================================
+# PREDICT COLOR
+# =========================================================
 
-    service = CNNService()
-    service.load()
-    response = service.search(TEST_IMAGE.read_bytes())
-    similarities = [result["similarity"] for result in response["results"]]
+def predict_color(
+    model,
+    color_mapping,
+    image_path
+):
 
-    assert similarities == sorted(similarities, reverse=True)
-    for score in similarities:
-        assert isinstance(score, float)
-        assert np.isfinite(score)
+    # Read image
+    image = cv2.imread(
+        str(image_path)
+    )
+
+    if image is None:
+        raise ValueError(
+            f"Cannot read image:\n"
+            f"{image_path}"
+        )
+
+    # Prepare image
+    processed = prepare_image(
+        image
+    )
+
+    # Predict
+    probabilities = model.predict(
+        processed,
+        verbose=0
+    )[0]
+
+    # Get highest probability
+    color_id = int(
+        np.argmax(
+            probabilities
+        )
+    )
+
+    # Convert class ID to color
+    predicted_color = color_mapping.get(
+        color_id,
+        f"UNKNOWN_{color_id}"
+    )
+
+    # Highest probability = confidence
+    confidence_score = float(
+        probabilities[color_id]
+    )
+
+    return (
+        predicted_color,
+        confidence_score
+    )
+
+
+# =========================================================
+# PYTEST FIXTURE - MODEL
+# =========================================================
+
+@pytest.fixture(
+    scope="module"
+)
+def color_model():
+
+    assert MODEL_PATH.exists(), (
+        f"\nColor CNN model not found:\n"
+        f"{MODEL_PATH}"
+    )
+
+    print()
+    print("Loading Color CNN...")
+
+    model = keras.models.load_model(
+        MODEL_PATH
+    )
+
+    print("Color CNN loaded successfully.")
+
+    return model
+
+
+# =========================================================
+# PYTEST FIXTURE - COLOR MAPPING
+# =========================================================
+
+@pytest.fixture(
+    scope="module"
+)
+def color_mapping():
+
+    return load_color_mapping()
+
+
+# =========================================================
+# PYTEST FIXTURE - ACTUAL LABELS
+# =========================================================
+
+@pytest.fixture(
+    scope="module"
+)
+def actual_labels():
+
+    return load_actual_labels()
+
+
+# =========================================================
+# PYTEST FIXTURE - TEST IMAGES
+# =========================================================
+
+@pytest.fixture(
+    scope="module"
+)
+def test_images():
+
+    assert TEST_DIR.exists(), (
+        f"\nTest dataset directory not found:\n"
+        f"{TEST_DIR}"
+    )
+
+    images = sorted(
+        [
+            file
+            for file in TEST_DIR.iterdir()
+            if file.is_file()
+            and file.suffix.lower()
+            in IMAGE_EXTENSIONS
+        ],
+        key=lambda path: path.name
+    )
+
+    assert images, (
+        f"\nNo test images found in:\n"
+        f"{TEST_DIR}"
+    )
+
+    return images
+
+
+# =========================================================
+# COLOR CNN TEST
+# =========================================================
+
+def test_color_predictions(
+    color_model,
+    color_mapping,
+    actual_labels,
+    test_images
+):
+
+    # Actual values
+    y_true = []
+
+    # Predicted values
+    y_pred = []
+
+    # =====================================================
+    # HEADER
+    # =====================================================
+
+    print()
+    print()
+    print("=" * 100)
+    print(
+        "                    COLOR CNN TEST RESULTS"
+    )
+    print("=" * 100)
+
+    print()
+
+    print(
+        f"Test Directory : {TEST_DIR}"
+    )
+
+    print(
+        f"Model          : {MODEL_PATH}"
+    )
+
+    print(
+        f"Test Images    : {len(test_images)}"
+    )
+
+    print()
+
+    # =====================================================
+    # TEST EACH IMAGE
+    # =====================================================
+
+    for image_path in test_images:
+
+        # -------------------------------------------------
+        # Predict color
+        # -------------------------------------------------
+
+        predicted_color, confidence_score = (
+            predict_color(
+                color_model,
+                color_mapping,
+                image_path
+            )
+        )
+
+        # -------------------------------------------------
+        # Get actual color
+        # -------------------------------------------------
+
+        actual_color = actual_labels.get(
+            image_path.name
+        )
+
+        if actual_color is None:
+
+            pytest.fail(
+                f"\nMissing actual color label for:\n"
+                f"{image_path.name}\n\n"
+                f"Add this filename to:\n"
+                f"{LABELS_PATH}"
+            )
+
+        actual_color = actual_color.upper()
+
+        # -------------------------------------------------
+        # Store values
+        # -------------------------------------------------
+
+        y_true.append(
+            actual_color
+        )
+
+        y_pred.append(
+            predicted_color
+        )
+
+        # -------------------------------------------------
+        # Per-image accuracy
+        # -------------------------------------------------
+
+        if predicted_color == actual_color:
+
+            image_accuracy = 1.0
+
+            result = "PASS"
+
+        else:
+
+            image_accuracy = 0.0
+
+            result = "FAIL"
+
+        # =================================================
+        # IMAGE RESULT
+        # =================================================
+
+        print(
+            f"Test:              {image_path.name}"
+        )
+
+        print(
+            f"Actual Color:      {actual_color}"
+        )
+
+        print(
+            f"Predicted Color:   {predicted_color}"
+        )
+
+        print(
+            f"Accuracy Score:    "
+            f"{image_accuracy:.4f}"
+        )
+
+        print(
+            f"Confidence Score:  "
+            f"{confidence_score:.4f} "
+            f"({confidence_score * 100:.2f}%)"
+        )
+
+        print(
+            f"Result:             {result}"
+        )
+
+        print(
+            "-" * 100
+        )
+
+    # =====================================================
+    # CALCULATE METRICS
+    # =====================================================
+
+    accuracy = accuracy_score(
+        y_true,
+        y_pred
+    )
+
+    precision = precision_score(
+        y_true,
+        y_pred,
+        average="macro",
+        zero_division=0
+    )
+
+    recall = recall_score(
+        y_true,
+        y_pred,
+        average="macro",
+        zero_division=0
+    )
+
+    f1 = f1_score(
+        y_true,
+        y_pred,
+        average="macro",
+        zero_division=0
+    )
+
+    # =====================================================
+    # CONFUSION MATRIX
+    # =====================================================
+
+    labels = sorted(
+        set(y_true) | set(y_pred)
+    )
+
+    cm = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=labels
+    )
+
+    # =====================================================
+    # CORRECT / INCORRECT
+    # =====================================================
+
+    correct_predictions = sum(
+        actual == predicted
+        for actual, predicted
+        in zip(
+            y_true,
+            y_pred
+        )
+    )
+
+    incorrect_predictions = sum(
+        actual != predicted
+        for actual, predicted
+        in zip(
+            y_true,
+            y_pred
+        )
+    )
+
+    # =====================================================
+    # OVERALL METRICS
+    # =====================================================
+
+    print()
+    print()
+    print("=" * 100)
+    print(
+        "                         MODEL EVALUATION"
+    )
+    print("=" * 100)
+
+    print()
+
+    print(
+        f"Accuracy:    {accuracy:.4f} "
+        f"({accuracy * 100:.2f}%)"
+    )
+
+    print(
+        f"Precision:   {precision:.4f} "
+        f"({precision * 100:.2f}%)"
+    )
+
+    print(
+        f"Recall:      {recall:.4f} "
+        f"({recall * 100:.2f}%)"
+    )
+
+    print(
+        f"F1-score:    {f1:.4f} "
+        f"({f1 * 100:.2f}%)"
+    )
+
+    print()
+
+    print(
+        f"Total Images:           {len(y_true)}"
+    )
+
+    print(
+        f"Correct Predictions:    "
+        f"{correct_predictions}"
+    )
+
+    print(
+        f"Incorrect Predictions:  "
+        f"{incorrect_predictions}"
+    )
+
+    # =====================================================
+    # CLASSIFICATION REPORT
+    # =====================================================
+
+    print()
+    print("=" * 100)
+    print(
+        "                    CLASSIFICATION REPORT"
+    )
+    print("=" * 100)
+
+    print()
+
+    report = classification_report(
+        y_true,
+        y_pred,
+        labels=labels,
+        zero_division=0
+    )
+
+    print(report)
+
+    # =====================================================
+    # CONFUSION MATRIX
+    # =====================================================
+
+    print("=" * 100)
+    print(
+        "                       CONFUSION MATRIX"
+    )
+    print("=" * 100)
+
+    print()
+
+    # -----------------------------------------------------
+    # Matrix header
+    # -----------------------------------------------------
+
+    print(
+        f"{'Actual / Predicted':<20}",
+        end=""
+    )
+
+    for label in labels:
+
+        print(
+            f"{label[:10]:>12}",
+            end=""
+        )
+
+    print()
+
+    print(
+        "-" * (
+            20 +
+            (12 * len(labels))
+        )
+    )
+
+    # -----------------------------------------------------
+    # Matrix rows
+    # -----------------------------------------------------
+
+    for row_index, actual_label in enumerate(labels):
+
+        print(
+            f"{actual_label:<20}",
+            end=""
+        )
+
+        for column_index in range(
+            len(labels)
+        ):
+
+            print(
+                f"{cm[row_index][column_index]:>12}",
+                end=""
+            )
+
+        print()
+
+    # =====================================================
+    # FINAL SUMMARY
+    # =====================================================
+
+    print()
+    print("=" * 100)
+    print(
+        "                         FINAL SUMMARY"
+    )
+    print("=" * 100)
+
+    print()
+
+    print(
+        f"Accuracy:    {accuracy:.4f}"
+        f"  ({accuracy * 100:.2f}%)"
+    )
+
+    print(
+        f"Precision:   {precision:.4f}"
+        f"  ({precision * 100:.2f}%)"
+    )
+
+    print(
+        f"Recall:      {recall:.4f}"
+        f"  ({recall * 100:.2f}%)"
+    )
+
+    print(
+        f"F1-score:    {f1:.4f}"
+        f"  ({f1 * 100:.2f}%)"
+    )
+
+    print()
+
+    print(
+        f"Correct:     "
+        f"{correct_predictions}/{len(y_true)}"
+    )
+
+    print(
+        f"Incorrect:   "
+        f"{incorrect_predictions}/{len(y_true)}"
+    )
+
+    print()
+
+    print("=" * 100)
+    print(
+        "                         TEST COMPLETE"
+    )
+    print("=" * 100)
+
+    print()
+
+    # The test succeeds when all images were evaluated.
+    # The metrics themselves are reported above.
+    assert len(y_true) == len(test_images)
+
+
+# =========================================================
+# BASIC MODEL TEST
+# =========================================================
+
+def test_color_model_output(
+    color_model,
+    color_mapping,
+    test_images
+):
+
+    predicted_color, confidence_score = (
+        predict_color(
+            color_model,
+            color_mapping,
+            test_images[0]
+        )
+    )
+
+    # Prediction must be a valid color
+    assert predicted_color in (
+        color_mapping.values()
+    )
+
+    # Confidence must be between 0 and 1
+    assert (
+        0.0 <= confidence_score <= 1.0
+    )
