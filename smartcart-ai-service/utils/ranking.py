@@ -1,5 +1,5 @@
 #
-#   Author: Junior
+# Author: Junior
 #
 
 from utils.color_similarity import COLOR_GROUPS

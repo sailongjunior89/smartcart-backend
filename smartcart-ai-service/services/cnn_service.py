@@ -12,8 +12,6 @@
 #   2. color_cnn.keras
 #      - 11 clothing colors
 #
-# Does NOT train the models.
-#
 
 import json
 from pathlib import Path
@@ -95,9 +93,7 @@ class CNNService:
         model_path = self.model_path
 
         if not model_path.exists():
-
             if self.best_model_path.exists():
-
                 model_path = self.best_model_path
 
             else:

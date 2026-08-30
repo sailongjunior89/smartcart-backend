@@ -1,5 +1,5 @@
 #
-#   Author: Junior
+# Author: Junior
 #
 
 COLOR_GROUPS = {
