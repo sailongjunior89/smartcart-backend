@@ -254,6 +254,34 @@ public class ImageSearchService {
                 );
 
         System.out.println(
+                "Exact matches found: "
+                        + products.size()
+        );
+
+// If no exact color match exists,
+// relax the color filter.
+        if (products.isEmpty()) {
+
+            System.out.println(
+                    "No exact color match. "
+                            + "Searching by gender + category..."
+            );
+
+            products =
+                    productRepository.searchByImageAttributes(
+                            gender,
+                            null,
+                            databaseCategory,
+                            ProductStatus.ACTIVE
+                    );
+
+            System.out.println(
+                    "Fallback matches found: "
+                            + products.size()
+            );
+        }
+
+        System.out.println(
                 "Products found: "
                         + products.size()
         );

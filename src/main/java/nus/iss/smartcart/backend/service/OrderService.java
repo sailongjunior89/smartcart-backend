@@ -223,4 +223,52 @@ public class OrderService {
             }
         }
     }
+
+    @Transactional(readOnly = true)
+    public List<CheckoutResponse> getCustomerOrders(Long userId) {
+
+        List<Order> orders =
+                orderRepository.findByUserIdOrderByOrderDateDesc(userId);
+
+        return orders.stream()
+                .map(order -> {
+
+                    Payment payment =
+                            paymentRepository.findByOrderId(order.getId())
+                                    .orElseThrow(() ->
+                                            new EntityNotFoundException(
+                                                    "Payment not found for order "
+                                                            + order.getId()
+                                            )
+                                    );
+
+                    DeliveryDetails deliveryDetails =
+                            DeliveryDetails.builder()
+                                    .firstName(order.getFirstName())
+                                    .lastName(order.getLastName())
+                                    .shippingAddress(order.getShippingAddress())
+                                    .phoneNumber(order.getPhoneNumber())
+                                    .build();
+
+                    List<OrderItem> orderItems =
+                            orderItemRepository.findByOrderId(
+                                    order.getId()
+                            );
+
+                    List<CartItemDetail> cartItemDetails =
+                            orderItems.stream()
+                                    .map(this::toCartItemDetail)
+                                    .toList();
+
+                    return CheckoutResponse.builder()
+                            .orderId(order.getId())
+                            .cartItemDetails(cartItemDetails)
+                            .totalAmount(order.getTotalAmount())
+                            .orderStatus(order.getStatus())
+                            .deliveryDetails(deliveryDetails)
+                            .paymentMethod(payment.getPaymentMethod())
+                            .build();
+                })
+                .toList();
+    }
 }

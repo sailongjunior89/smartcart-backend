@@ -42,4 +42,17 @@ public class OrderController {
         List<MerchantOrderItemResponse> response = orderService.getMerchantOrderItems();
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping
+    public ResponseEntity<List<CheckoutResponse>> getCustomerOrders() {
+
+        Long userId =
+                currentUserProvider
+                        .getCurrentCustomer()
+                        .getId();
+
+        return ResponseEntity.ok(
+                orderService.getCustomerOrders(userId)
+        );
+    }
 }
