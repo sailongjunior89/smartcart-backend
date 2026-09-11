@@ -2,7 +2,9 @@ package nus.iss.smartcart.backend.controller;
 
 import jakarta.persistence.EntityNotFoundException;
 import nus.iss.smartcart.backend.dto.CreateUserProfileRequest;
+import nus.iss.smartcart.backend.dto.UpdateUserProfileRequest;
 import nus.iss.smartcart.backend.dto.UserProfileForDeliveryDetails;
+import nus.iss.smartcart.backend.dto.UserProfileResponse;
 import nus.iss.smartcart.backend.model.User;
 import nus.iss.smartcart.backend.model.UserProfile;
 import nus.iss.smartcart.backend.repository.UserRepository;
@@ -208,5 +210,41 @@ public class UserProfileController {
                             "Unable to create user profile."
                     );
         }
+    }
+
+    // =========================================
+    // GET CURRENT USER PROFILE FOR EDITING
+    // =========================================
+
+    @GetMapping("/edit")
+    public ResponseEntity<UserProfileResponse> getCurrentUserProfile() {
+
+        Long userId =
+                currentUserProvider
+                        .getCurrentCustomer()
+                        .getId();
+
+        return ResponseEntity.ok(
+                userProfileService
+                        .getCurrentUserProfile(userId)
+        );
+    }
+
+    @PutMapping("/edit")
+    public ResponseEntity<UserProfileResponse> updateCurrentUserProfile(
+            @RequestBody UpdateUserProfileRequest request
+    ) {
+
+        Long userId =
+                currentUserProvider
+                        .getCurrentCustomer()
+                        .getId();
+
+        return ResponseEntity.ok(
+                userProfileService.updateCurrentUserProfile(
+                        userId,
+                        request
+                )
+        );
     }
 }

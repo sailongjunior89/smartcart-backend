@@ -168,6 +168,38 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/check-username")
+    public ResponseEntity<Map<String, String>> checkUsername(
+            @RequestBody Map<String, String> request
+    ) {
+
+        String username = request.get("username");
+
+        if (username == null || username.trim().isEmpty()) {
+
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            MESSAGE, "Username is required"
+                    ));
+        }
+
+        boolean exists = authService.checkUsername(username.trim());
+
+        if (!exists) {
+
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of(
+                            MESSAGE, "Username not found"
+                    ));
+        }
+
+        return ResponseEntity.ok(
+                Map.of(
+                        MESSAGE, "Username found"
+                )
+        );
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Object> logout() {
 

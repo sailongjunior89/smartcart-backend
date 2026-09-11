@@ -370,7 +370,10 @@ public class AuthService {
 
     //Junior
     public boolean checkEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
 
-        return userRepository.findByEmail(email).isPresent();
+    public boolean checkUsername(String username) {
+        return userRepository.existsByUsername(username);
     }
 }
