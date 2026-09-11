@@ -5,8 +5,6 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-//Author: Junior
-
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
@@ -34,9 +32,9 @@ public class WebConfig implements WebMvcConfigurer {
             ResourceHandlerRegistry registry
     ) {
 
-        registry.addResourceHandler("/images/**")
+        registry.addResourceHandler("/assets/**")
                 .addResourceLocations(
-                        "classpath:/static/images/"
+                        "classpath:/static/assets/"
                 );
     }
 }

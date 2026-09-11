@@ -72,7 +72,9 @@ public class SecurityConfig {
                         .permitAll()
 
                         // Static images
-                        .requestMatchers("/images/**")
+                        .requestMatchers("/images/**",
+                                        "/assets/**")
+
                         .permitAll()
 
                         // Avatar images
@@ -112,7 +114,7 @@ public class SecurityConfig {
                                 "/api/v1/products/**",
                                 "/api/home/**"
                         )
-                        .permitAll()
+                        .authenticated()
                                                             
                         // Everything else requires authentication
                         .anyRequest()

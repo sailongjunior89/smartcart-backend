@@ -4,59 +4,139 @@ import nus.iss.smartcart.backend.exception.ForbiddenException;
 import nus.iss.smartcart.backend.model.User;
 import nus.iss.smartcart.backend.model.UserRole;
 import nus.iss.smartcart.backend.repository.UserRepository;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-// AUTHOR: Htet Nandar(Grace)
-/**
- * Resolves the caller's User entity.
- *
- * All three - getCurrentAdmin(), getCurrentMerchant(), getCurrentCustomer() - read the real
- * JwtAuthenticationFilter SecurityContext and enforce the matching role, throwing
- * ForbiddenException if no one is authenticated or the authenticated account has a different
- * role. Customer/merchant login shares one endpoint (POST /api/auth/login) with admin - see
- * AuthController/AuthService - so the same real-auth path works for all three roles.
- */
 @Component
 public class CurrentUserProvider {
+
     private final UserRepository userRepository;
 
-    public CurrentUserProvider(UserRepository userRepository) {
+
+    public CurrentUserProvider(
+            UserRepository userRepository
+    ) {
         this.userRepository = userRepository;
     }
 
-    public User getCurrentMerchant() {
-        return getCurrentUserWithRole(UserRole.MERCHANT);
-    }
 
-    public User getCurrentCustomer() {
-        return getCurrentUserWithRole(UserRole.CUSTOMER);
-    }
-
-    public User getCurrentAdmin() {
-        return getCurrentUserWithRole(UserRole.ADMIN);
-    }
+    // ============================================================
+    // GET CURRENT USER
+    // ============================================================
 
     public User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ForbiddenException("Not authenticated.");
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
+
+            throw new ForbiddenException(
+                    "Not authenticated."
+            );
         }
+
+
+        // ============================================================
+        // GET EMAIL FROM AUTHENTICATED USER
+        // ============================================================
 
         String email = authentication.getName();
 
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new ForbiddenException("Authenticated user no longer exists."));
+
+        System.out.println(
+                "========================================"
+        );
+
+        System.out.println(
+                "CURRENT AUTHENTICATED USER: " + email
+        );
+
+        System.out.println(
+                "AUTHENTICATION TYPE: "
+                        + authentication.getClass().getName()
+        );
+
+        System.out.println(
+                "========================================"
+        );
+
+
+        return userRepository
+                .findByEmail(email)
+                .orElseThrow(() ->
+                        new ForbiddenException(
+                                "Authenticated user no longer exists. Email: "
+                                        + email
+                        )
+                );
     }
 
-    private User getCurrentUserWithRole(UserRole expectedRole) {
+
+    // ============================================================
+    // GET CURRENT CUSTOMER
+    // ============================================================
+
+    public User getCurrentCustomer() {
+
         User user = getCurrentUser();
 
-        if (user.getRole() != expectedRole) {
-            throw new ForbiddenException("This action requires a " + expectedRole + " account.");
+
+        if (user.getRole() != UserRole.CUSTOMER) {
+
+            throw new ForbiddenException(
+                    "This action requires a CUSTOMER account."
+            );
         }
+
+
+        return user;
+    }
+
+
+    // ============================================================
+    // GET CURRENT MERCHANT
+    // ============================================================
+
+    public User getCurrentMerchant() {
+
+        User user = getCurrentUser();
+
+
+        if (user.getRole() != UserRole.MERCHANT) {
+
+            throw new ForbiddenException(
+                    "This action requires a MERCHANT account."
+            );
+        }
+
+
+        return user;
+    }
+
+
+    // ============================================================
+    // GET CURRENT ADMIN
+    // ============================================================
+
+    public User getCurrentAdmin() {
+
+        User user = getCurrentUser();
+
+
+        if (user.getRole() != UserRole.ADMIN) {
+
+            throw new ForbiddenException(
+                    "This action requires an ADMIN account."
+            );
+        }
+
 
         return user;
     }
